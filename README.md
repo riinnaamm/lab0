@@ -1,6 +1,6 @@
 # Лабораторна робота 0 — синтаксис Java
 
-![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Java-Fall2026/{{REPO}}/badges/badge.json)
+![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Java-Fall2026/lab0-riinnaamm/badges/badge.json)
 
 ## Що потрібно встановити
 
