@@ -1,0 +1,83 @@
+name: Lab Unit Tests
+
+on:
+  push:
+    branches-ignore: [badges]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Restore reference tests
+        env:
+          REFERENCE_TESTS: https://raw.githubusercontent.com/Java-Fall2026/java-2025-syntax/main/src/test/java/ua/university/BasicOperatorsTest.java
+        run: |
+          curl -sSL --fail -o src/test/java/ua/university/BasicOperatorsTest.java "$REFERENCE_TESTS"
+
+      - name: Run unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon
+
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, json, os, xml.etree.ElementTree as ET
+          t = f = e = s = 0
+          for p in glob.glob('build/test-results/test/*.xml'):
+              r = ET.parse(p).getroot()
+              t += int(r.get('tests', 0)); f += int(r.get('failures', 0))
+              e += int(r.get('errors', 0)); s += int(r.get('skipped', 0))
+          ok = t - f - e - s
+          color = 'brightgreen' if t and ok == t else ('orange' if ok else 'red')
+          json.dump({"schemaVersion": 1, "label": "tests",
+                     "message": f"{ok}/{t} passed", "color": color},
+                    open('badge.json', 'w'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as o:
+              o.write("## Test results\n\n")
+              o.write("| Total | Passed | Failed | Errors | Skipped |\n")
+              o.write("|---|---|---|---|---|\n")
+              o.write(f"| {t} | {ok} | {f} | {e} | {s} |\n")
+          EOF
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          retention-days: 30
+
+      - name: Publish badge
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git stash -u
+          git checkout badges 2>/dev/null || git checkout --orphan badges
+          git rm -rf . >/dev/null 2>&1 || true
+          git stash pop
+          git add -f badge.json
+          git commit -m "update badge [skip ci]" || exit 0
+          git push -f origin badges
